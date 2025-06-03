@@ -15,6 +15,18 @@
         </div>
       </div>
       
+      <div v-else-if="engineStore.gameMode === 'computer'" class="ai-info">
+        <div class="ai-status">
+          🤖 vs Computer ({{ engineStore.difficulty }})
+        </div>
+        <div class="player-info">
+          You are playing as: <strong>{{ engineStore.aiColor === 'white' ? 'Black' : 'White' }}</strong>
+        </div>
+        <div v-if="engineStore.isThinking" class="ai-thinking">
+          🤔 AI is thinking...
+        </div>
+      </div>
+      
       <div class="status-info">
         <p v-if="chessStore.gameStatus === 'playing'">
           Current Player: {{ chessStore.currentPlayer === 'white' ? 'White' : 'Black' }}
@@ -38,11 +50,14 @@
       
       <div class="game-controls">
         <button @click="chessStore.resetGame()" class="reset-btn">New Game</button>
-        <button v-if="!multiplayerStore.isConnected" @click="showMultiplayerSetup = true" class="multiplayer-btn">
-          Play Online
+        <button v-if="!multiplayerStore.isConnected && engineStore.gameMode === 'human'" @click="showGameModeSetup = true" class="mode-btn">
+          Choose Mode
         </button>
-        <button v-else @click="multiplayerStore.disconnect()" class="disconnect-btn">
+        <button v-else-if="multiplayerStore.isConnected" @click="multiplayerStore.disconnect()" class="disconnect-btn">
           Disconnect
+        </button>
+        <button v-else-if="engineStore.gameMode === 'computer'" @click="showGameModeSetup = true" class="mode-btn">
+          Change Mode
         </button>
       </div>
     </div>
@@ -94,6 +109,14 @@
       </div>
     </div>
     
+    <GameModeSetup 
+      v-if="showGameModeSetup" 
+      @close="showGameModeSetup = false"
+      @start-local="startLocalGame"
+      @start-computer="startComputerGame"
+      @start-online="showMultiplayerSetup = true; showGameModeSetup = false"
+    />
+    
     <MultiplayerSetup 
       v-if="showMultiplayerSetup" 
       @close="showMultiplayerSetup = false"
@@ -105,22 +128,27 @@
 import { ref, onMounted, onUnmounted } from 'vue'
 import { useChessStore } from '../stores/chess.js'
 import { useMultiplayerStore } from '../stores/multiplayer.js'
+import { useChessEngineStore } from '../stores/chessEngine.js'
 import ChessPiece from './ChessPiece.vue'
 import MultiplayerSetup from './MultiplayerSetup.vue'
+import GameModeSetup from './GameModeSetup.vue'
 
 export default {
   name: 'ChessBoard',
   components: {
     ChessPiece,
-    MultiplayerSetup
+    MultiplayerSetup,
+    GameModeSetup
   },
   setup() {
     const chessStore = useChessStore()
     const multiplayerStore = useMultiplayerStore()
+    const engineStore = useChessEngineStore()
     const draggedPiece = ref(null)
     const dragOver = ref(false)
     const dragOverSquare = ref(null)
     const showMultiplayerSetup = ref(false)
+    const showGameModeSetup = ref(false)
     
     const formatMove = (move) => {
       const fromSquare = String.fromCharCode(97 + move.from.col) + (8 - move.from.row)
@@ -176,6 +204,33 @@ export default {
       }
     })
     
+    const startLocalGame = () => {
+      engineStore.setGameMode('human')
+      chessStore.resetGame()
+    }
+    
+    const startComputerGame = (settings) => {
+      chessStore.resetGame()
+      // AI move will be triggered automatically if AI plays first
+      if (settings.playerColor === 'black') {
+        setTimeout(() => {
+          chessStore.checkAIMove()
+        }, 1000)
+      }
+    }
+    
+    onMounted(() => {
+      // Set up event listeners for multiplayer data
+      const originalHandleReceivedData = multiplayerStore.handleReceivedData
+      multiplayerStore.handleReceivedData = (data) => {
+        if (data.type === 'move') {
+          chessStore.handleRemoteMove(data)
+        } else if (data.type === 'reset') {
+          chessStore.handleRemoteReset()
+        }
+      }
+    })
+    
     onUnmounted(() => {
       // Clean up if needed
     })
@@ -183,11 +238,15 @@ export default {
     return {
       chessStore,
       multiplayerStore,
+      engineStore,
       formatMove,
       draggedPiece,
       dragOver,
       dragOverSquare,
       showMultiplayerSetup,
+      showGameModeSetup,
+      startLocalGame,
+      startComputerGame,
       handleDragStart,
       handleDragEnd,
       handleDragOver,
@@ -243,18 +302,44 @@ export default {
   font-style: italic;
 }
 
-.multiplayer-info {
-  background: #e8f5e8;
-  border: 2px solid #4CAF50;
+.multiplayer-info, .ai-info {
   border-radius: 10px;
   padding: 1rem;
   margin-bottom: 1rem;
 }
 
-.connection-status {
+.multiplayer-info {
+  background: #e8f5e8;
+  border: 2px solid #4CAF50;
+}
+
+.ai-info {
+  background: #f3e5f5;
+  border: 2px solid #9c27b0;
+}
+
+.connection-status, .ai-status {
   font-weight: bold;
-  color: #2e7d32;
   margin-bottom: 0.5rem;
+}
+
+.connection-status {
+  color: #2e7d32;
+}
+
+.ai-status {
+  color: #7b1fa2;
+}
+
+.ai-thinking {
+  color: #9c27b0;
+  font-style: italic;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.6; }
 }
 
 .player-info, .room-info {
@@ -270,7 +355,7 @@ export default {
   flex-wrap: wrap;
 }
 
-.reset-btn, .multiplayer-btn, .disconnect-btn {
+.reset-btn, .mode-btn, .disconnect-btn {
   background-color: #4CAF50;
   color: white;
   border: none;
@@ -285,11 +370,11 @@ export default {
   background-color: #45a049;
 }
 
-.multiplayer-btn {
+.mode-btn {
   background-color: #2196F3;
 }
 
-.multiplayer-btn:hover {
+.mode-btn:hover {
   background-color: #1976D2;
 }
 

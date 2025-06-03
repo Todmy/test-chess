@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { useMultiplayerStore } from './multiplayer.js'
+import { useChessEngineStore } from './chessEngine.js'
 
 const INITIAL_BOARD = [
   ['r', 'n', 'b', 'q', 'k', 'b', 'n', 'r'],
@@ -89,6 +90,13 @@ export const useChessStore = defineStore('chess', {
       }
       
       this.checkGameStatus()
+      
+      // Check if AI should make a move (only if not a remote move)
+      if (!isRemoteMove) {
+        setTimeout(() => {
+          this.checkAIMove()
+        }, 500)
+      }
     },
 
     clearSelection() {
@@ -267,6 +275,25 @@ export const useChessStore = defineStore('chess', {
 
     handleRemoteReset() {
       this.resetGame(true)
+    },
+
+    async checkAIMove() {
+      const engineStore = useChessEngineStore()
+      
+      if (engineStore.shouldAIMakeMove(this.currentPlayer) && this.gameStatus === 'playing' && !engineStore.isThinking) {
+        const bestMove = await engineStore.getBestMove(this.board, this)
+        
+        if (bestMove) {
+          // Mark as AI move to prevent infinite recursion
+          this.movePiece(
+            bestMove.from.row, 
+            bestMove.from.col, 
+            bestMove.to.row, 
+            bestMove.to.col, 
+            true // Mark as remote/AI move to prevent triggering another AI move
+          )
+        }
+      }
     },
 
     findKing(isWhite) {
