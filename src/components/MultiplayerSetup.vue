@@ -1,9 +1,9 @@
 <template>
-  <div class="multiplayer-setup" @click.self="emit('close')">
+  <div class="multiplayer-setup" @click.self="closeModal">
     <div class="setup-container">
       <div class="modal-header">
         <h2>Multiplayer Chess</h2>
-        <button class="close-btn" @click="emit('close')">×</button>
+        <button class="close-btn" @click="closeModal">×</button>
       </div>
       
       <div v-if="multiplayerStore.connectionStatus === 'disconnected'" class="connection-options">
@@ -61,7 +61,7 @@
           <p>Playing as: <strong>{{ multiplayerStore.playerColor === 'white' ? 'White' : 'Black' }}</strong></p>
           <p>Room: {{ multiplayerStore.roomId }}</p>
           <div class="connected-actions">
-            <button @click="emit('close')" class="play-btn">Start Playing</button>
+            <button @click="closeModal" class="play-btn">Start Playing</button>
             <button @click="disconnectGame" class="disconnect-btn">Disconnect</button>
           </div>
         </div>
@@ -120,6 +120,10 @@ export default {
       multiplayerStore.disconnect()
     }
 
+    const closeModal = () => {
+      emit('close')
+    }
+
     return {
       multiplayerStore,
       joinRoomId,
@@ -128,7 +132,8 @@ export default {
       copyRoomCode,
       cancelConnection,
       disconnectGame,
-      resetConnection
+      resetConnection,
+      closeModal
     }
   }
 }
